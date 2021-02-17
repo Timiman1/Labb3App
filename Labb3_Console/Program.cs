@@ -105,10 +105,12 @@ namespace Labb3_Console
 
             fs.Read(bytes, 0, (int)fs.Length);
 
+            List<int[]> idatChunkData = new List<int[]>();
+
             //Dictionary<string: Field type, { int: StartIndex, int: Chunk Size}>
             Dictionary<string, int[]> chunks = new Dictionary<string, int[]>()
             { 
-                {"IHDR", new int[] { -1, -1 } }, {"PLTE", new int[] { -1, -1 } }, {"IDAT", new int[] { -1, -1 } }, 
+                {"IHDR", new int[] { -1, -1 } }, {"PLTE", new int[] { -1, -1 } }, 
                 {"IEND", new int[] { -1, -1 } }, {"cHRM", new int[] { -1, -1 } },
                 { "gAMA", new int[] { -1, -1 } }, {"iCCP", new int[] { -1, -1 } }, {"sBIT", new int[] { -1, -1 } },
                 {"sRGB", new int[] { -1, -1 } }, {"bKGD", new int[] { -1, -1 } }, {"hIST", new int[] { -1, -1 } },
@@ -120,8 +122,19 @@ namespace Labb3_Console
             foreach (var chunkType in chunks.Keys.ToArray())
                 CalculateAndSetChunkStartIndex(chunkType, bytes, chunks);
 
-            var chunkData = chunks.Values.ToArray();
-            var fieldTypes = chunks.Keys.ToArray();
+            CalculateAndSetIDATChunksStartIndices(bytes, idatChunkData);
+
+            var tempfieldList = chunks.Keys.ToList();
+            var tempdataList = chunks.Values.ToList();
+
+            foreach (var data in idatChunkData)
+            {
+                tempfieldList.Add("IDAT");
+                tempdataList.Add(data);
+            }
+
+            var chunkData = tempdataList.ToArray();
+            var fieldTypes = tempfieldList.ToArray();
 
             SortChunkDataAndFieldTypes(chunkData, fieldTypes);
 
@@ -142,8 +155,31 @@ namespace Labb3_Console
 
             Console.WriteLine("\nFound chunks: ");
 
-            for (int i = 0; i < chunks.Count; i++)
+            for (int i = 0; i < chunkData.Length; i++)
                 Console.WriteLine("Field type: {0}    Size = {2} bytes", fieldTypes[i], chunkData[i][0], chunkData[i][1]);
+        }
+
+        static void CalculateAndSetIDATChunksStartIndices(byte[] bytes, List<int[]> idatChunks)
+        {
+            byte count = 0;
+
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                for (int j = 0; j < 4; j++)
+                {
+                    if (bytes[i + j] == "IDAT"[j])
+                        count++;
+                    else
+                    {
+                        count = 0;
+                        break;
+                    }
+                }
+                if (count == 4)
+                {
+                    idatChunks.Add(new int[] { i, -1 });
+                }
+            }
         }
 
         static void CalculateAndSetChunkStartIndex(string chunkType, byte[] bytes, Dictionary<string, int[]> chunks)
