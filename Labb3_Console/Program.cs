@@ -4,6 +4,7 @@ using System.Text;
 using System.Globalization;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 
 namespace Labb3_Console
 {
@@ -137,7 +138,7 @@ namespace Labb3_Console
                 return;
             }
 
-            CalculateAndSetAllChunkDataSizes(chunkData); 
+            CalculateAndSetAllChunkDataSizes(bytes, chunkData); 
 
             Console.WriteLine("\nFound chunks: ");
 
@@ -235,14 +236,17 @@ namespace Labb3_Console
             }
         }
 
-        static void CalculateAndSetAllChunkDataSizes(int[][] chunkData)
+        static void CalculateAndSetAllChunkDataSizes(byte[] bytes, int[][] chunkData)
         {
+
             for (int i = 0; i < chunkData.Length; i++)
             {
-                if (i + 1 < chunkData.Length)
-                    chunkData[i][1] = chunkData[i + 1][0] - chunkData[i][0] - 4;
-                else
-                    chunkData[i][1] = 0;
+                var b1 = bytes[chunkData[i][0] - 4];
+                var b2 = bytes[chunkData[i][0] - 3];
+                var b3 = bytes[chunkData[i][0] - 2];
+                var b4 = bytes[chunkData[i][0] - 1];
+                int length = BitConverter.ToInt32(new byte[] { b4, b3, b2, b1 });
+                chunkData[i][1] = length;
             }
         }
 
