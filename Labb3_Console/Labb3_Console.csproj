@@ -15,6 +15,9 @@
     <None Update="kling&amp;klang.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Lab3ScreenDump-900x300.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="ladda ned.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

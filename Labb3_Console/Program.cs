@@ -105,42 +105,22 @@ namespace Labb3_Console
 
             fs.Read(bytes, 0, (int)fs.Length);
 
-            List<int[]> idatChunkData = new List<int[]>();
+            List<Chunk> chunks = new List<Chunk>()
+               {
+                   new Chunk("IHDR"), new Chunk("PLTE"),new Chunk("IEND"),new Chunk("cHRM"),new Chunk("gAMA"),new Chunk("iCCP"),
+                   new Chunk("sBIT"),new Chunk("sRGB"),new Chunk("bKGD"),new Chunk("hIST"),new Chunk("tRNS"),new Chunk("pHYs"),
+                   new Chunk("sPLT"),new Chunk("tIME"),new Chunk("iTXt"),new Chunk("tEXt"),new Chunk("zTXt")
+               };
 
-            //Dictionary<string: Field type, { int: StartIndex, int: Chunk Size}>
-            Dictionary<string, int[]> chunks = new Dictionary<string, int[]>()
-            { 
-                {"IHDR", new int[] { -1, -1 } }, {"PLTE", new int[] { -1, -1 } }, 
-                {"IEND", new int[] { -1, -1 } }, {"cHRM", new int[] { -1, -1 } },
-                { "gAMA", new int[] { -1, -1 } }, {"iCCP", new int[] { -1, -1 } }, {"sBIT", new int[] { -1, -1 } },
-                {"sRGB", new int[] { -1, -1 } }, {"bKGD", new int[] { -1, -1 } }, {"hIST", new int[] { -1, -1 } },
-                { "tRNS", new int[] { -1, -1 } }, {"pHYs", new int[] { -1, -1 } }, {"sPLT", new int[] { -1, -1 } }, 
-                {"tIME", new int[] { -1, -1 } }, {"iTXt", new int[] { -1, -1 } }, {"tEXt", new int[] { -1, -1 } },
-                { "zTXt",new int[] { -1, -1 } } 
-            };
+            FindAllSingleOccuranceChunksInStream(bytes, chunks);
 
-            foreach (var chunkType in chunks.Keys.ToArray())
-                CalculateAndSetChunkStartIndex(chunkType, bytes, chunks);
+            FindAllIDATChunksInStream(bytes, chunks);
 
-            CalculateAndSetIDATChunksStartIndices(bytes, idatChunkData);
-
-            var tempfieldList = chunks.Keys.ToList();
-            var tempdataList = chunks.Values.ToList();
-
-            foreach (var data in idatChunkData)
-            {
-                tempfieldList.Add("IDAT");
-                tempdataList.Add(data);
-            }
-
-            var chunkData = tempdataList.ToArray();
-            var fieldTypes = tempfieldList.ToArray();
-
-            SortChunkDataAndFieldTypes(chunkData, fieldTypes);
+            SortChunks(chunks);
 
             string[] errorMessages;
 
-            if (!PNGContainsCriticalChunks(fieldTypes, out errorMessages))
+            if (!PNGContainsCriticalChunks(chunks, out errorMessages))
             {
                 Console.WriteLine();
                 foreach (var msg in errorMessages)
@@ -151,15 +131,16 @@ namespace Labb3_Console
                 return;
             }
 
-            CalculateAndSetAllChunkDataSizes(bytes, chunkData); 
+            CalculateAndSetAllChunkLengths(bytes, chunks); 
 
             Console.WriteLine("\nFound chunks: ");
-
-            for (int i = 0; i < chunkData.Length; i++)
-                Console.WriteLine("Field type: {0}    Size = {2} bytes", fieldTypes[i], chunkData[i][0], chunkData[i][1]);
+            foreach (var chunk in chunks)
+            {
+                Console.WriteLine("Field type: {0}    Length = {1} bytes", chunk.FieldType, chunk.Length);
+            }
         }
 
-        static void CalculateAndSetIDATChunksStartIndices(byte[] bytes, List<int[]> idatChunks)
+        static void FindAllIDATChunksInStream(byte[] bytes, List<Chunk> chunks)
         {
             byte count = 0;
 
@@ -177,37 +158,46 @@ namespace Labb3_Console
                 }
                 if (count == 4)
                 {
-                    idatChunks.Add(new int[] { i, -1 });
+                    chunks.Add(new Chunk("IDAT", i));
+                    count = 0;
                 }
             }
         }
 
-        static void CalculateAndSetChunkStartIndex(string chunkType, byte[] bytes, Dictionary<string, int[]> chunks)
+        static void FindAllSingleOccuranceChunksInStream(byte[] bytes, List<Chunk> chunks)
         {
             byte count = 0;
 
-            for (int i = 0; i < bytes.Length; i++)
+            for (int k = 0; k < chunks.Count; k++)
             {
-                for (int j = 0; j < 4; j++)
+                var chunk = chunks[k];
+                for (int i = 0; i < bytes.Length; i++)
                 {
-                    if (bytes[i + j] == chunkType[j])
-                        count++;
-                    else
+                    for (int j = 0; j < 4; j++)
                     {
-                        count = 0;
+                        if (bytes[i + j] == chunk.FieldType[j])
+                            count++;
+                        else
+                        {
+                            count = 0;
+                            break;
+                        }
+                    }
+                    if (count == 4)
+                    {
+                        chunk.StartIndex = i;
                         break;
                     }
                 }
-                if (count == 4)
-                {
-                    chunks[chunkType][0] = i;
-                    return;
-                }
-            }
-            chunks.Remove(chunkType);
-        }
 
-        static bool PNGContainsCriticalChunks(string[] fieldTypes, out string[] errorMessages)
+                if (count < 4)
+                    chunks[k] = null;
+
+                count = 0;
+            }
+            chunks.RemoveAll(c => c == null);
+        }
+        static bool PNGContainsCriticalChunks(List<Chunk> chunks, out string[] errorMessages)
         {
             bool containsIHDR = false;
             bool containsIDAT = false;
@@ -217,13 +207,15 @@ namespace Labb3_Console
 
             errorMessages = new string[6];
 
-            if (fieldTypes[0] != "IHDR")
+            if (chunks[0].FieldType != "IHDR")
                 misplacedIHDR = true;
-            if (fieldTypes[fieldTypes.Length - 1] != "IEND")
+            if (chunks[chunks.Count - 1].FieldType != "IEND")
                 misplacedIEND = true;
 
-            foreach (var fType in fieldTypes)
+            foreach (var chunk in chunks)
             {
+                string fType = chunk.FieldType;
+
                 if (fType == "IHDR")
                     containsIHDR = true;
                 else if (fType == "IDAT")
@@ -250,39 +242,33 @@ namespace Labb3_Console
             return false;
         }
 
-        static void SortChunkDataAndFieldTypes(int[][] chunkData, string[] fieldTypes)
+        static void SortChunks(List<Chunk> chunks)
         {
             // Bubble sort
-            for (int j = 0; j <= chunkData.Length - 2; j++)
+            for (int j = 0; j <= chunks.Count - 2; j++)
             {
-                for (int i = 0; i <= chunkData.Length - 2; i++)
+                for (int i = 0; i <= chunks.Count - 2; i++)
                 {
-                    if (chunkData[i][0] > chunkData[i + 1][0])
+                    if (chunks[i].StartIndex > chunks[i + 1].StartIndex)
                     {
-                        int[] tempData = chunkData[i + 1];
-                        string tempType = fieldTypes[i + 1];
-
-                        chunkData[i + 1] = chunkData[i];
-                        fieldTypes[i + 1] = fieldTypes[i];
-
-                        chunkData[i] = tempData;
-                        fieldTypes[i] = tempType;
+                        Chunk tempChunk = chunks[i + 1];                       
+                        chunks[i + 1] = chunks[i];
+                        chunks[i] = tempChunk;
                     }
                 }
             }
         }
 
-        static void CalculateAndSetAllChunkDataSizes(byte[] bytes, int[][] chunkData)
+        static void CalculateAndSetAllChunkLengths(byte[] bytes, List<Chunk> chunks)
         {
-
-            for (int i = 0; i < chunkData.Length; i++)
+            foreach (var chunk in chunks)
             {
-                var b1 = bytes[chunkData[i][0] - 4];
-                var b2 = bytes[chunkData[i][0] - 3];
-                var b3 = bytes[chunkData[i][0] - 2];
-                var b4 = bytes[chunkData[i][0] - 1];
+                var b1 = bytes[chunk.StartIndex - 4];
+                var b2 = bytes[chunk.StartIndex - 3];
+                var b3 = bytes[chunk.StartIndex - 2];
+                var b4 = bytes[chunk.StartIndex - 1];
                 int length = BitConverter.ToInt32(new byte[] { b4, b3, b2, b1 });
-                chunkData[i][1] = length;
+                chunk.Length = length;
             }
         }
 
@@ -327,6 +313,22 @@ namespace Labb3_Console
             int height = BitConverter.ToInt32(bytes[4..]);
 
             return $"{width}x{height}";
+        }
+    }
+
+    public class Chunk
+    {
+        public string FieldType;
+
+        public int StartIndex;
+
+        public int Length;
+
+        public Chunk(string fType, int startIndex = -1, int length = -1)
+        {
+            FieldType = fType;
+            StartIndex = startIndex;
+            Length = length;
         }
     }
 }
